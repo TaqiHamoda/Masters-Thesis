@@ -49,7 +49,7 @@ if __name__ == "__main__":
     if not photogrammetry.sparse_path.exists():
         print("Performing sparse reconstruction...")
         start_time = perf_counter()
-        photogrammetry.sparse_reconstruction()
+        photogrammetry.sparse_reconstruction(**algo_cfg['sparse'])
         photogrammetry.prune_poses(**algo_cfg['pruning'])
         print(f"Sparse completed in {perf_counter() - start_time:.2f}s")
 

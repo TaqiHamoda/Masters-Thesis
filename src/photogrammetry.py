@@ -73,15 +73,24 @@ class Photogrammetry:
 
         pycolmap.match_spatial(self.database_path, matching_options=spatial_opts)
 
-    def sparse_reconstruction(self):
+    def sparse_reconstruction(self, ba_global_ratio: float = 2.0):
+        """Incrementally registers images, Triangulates 3D points, and Performs local and global bundle adjustment"""
         if not self.database_path.exists():
             raise ValueError("Database not found. Please run feature extraction and matching before sparse reconstruction.")
 
         self.sparse_path.mkdir(exist_ok=True)
 
-        # Incrementally registers images, Triangulates 3D points,
-        # and Performs local and global bundle adjustment
-        maps = pycolmap.incremental_mapping(self.database_path, self.images_dir, self.sparse_path)
+        options = pycolmap.IncrementalPipelineOptions()
+        options.ba_global_images_ratio = ba_global_ratio
+        options.ba_global_points_ratio = ba_global_ratio
+
+        maps = pycolmap.incremental_mapping(
+            database_path=self.database_path,
+            image_path=self.images_dir,
+            output_path=self.sparse_path,
+            options=options
+        )
+
         maps[0].write(self.sparse_path)
         maps[0].write_text(self.sparse_path)
 
