@@ -8,7 +8,7 @@ from .dataset import Dataset
 class Photogrammetry:
     # Example: https://deepwiki.com/colmap/pycolmap/5.2-multi-view-stereo-(mvs)#complete-mvs-pipeline-example
 
-    def __init__(self, dataset: Dataset, output_dir: str = "output/"):
+    def __init__(self, dataset: Dataset, output_path: str = "output/"):
         self.dataset = dataset
         if len(self.dataset.images) == 0:
             raise ValueError("Dataset contains no images. Please load data before initializing Photogrammetry.")
@@ -22,7 +22,7 @@ class Photogrammetry:
         self.camera_params = (img.fx, img.fy, img.cx, img.cy)
 
         # Prepare paths for COLMAP outputs
-        self.output_dir = Path(output_dir)
+        self.output_dir = Path(output_path)
 
         self.database_path = self.output_dir / "database.db"
         self.sparse_path = self.output_dir / "sparse"

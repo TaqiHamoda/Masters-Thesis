@@ -23,6 +23,7 @@ if __name__ == "__main__":
         info_topic=t_cfg['info_topic']
     )
 
+    print("Loading dataset...")
     if dataset.csv_file.exists():
         dataset.load_data_from_csv()
     else:
