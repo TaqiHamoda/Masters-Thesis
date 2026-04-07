@@ -1,4 +1,4 @@
-import cv2, numpy as np
+import cv2, pickle, numpy as np
 
 from rosbags.highlevel import AnyReader
 from rosbags.typesys import Stores, get_types_from_msg, get_typestore
@@ -169,12 +169,10 @@ class Dataset:
 
         self.cameras_csv = self.output_path / "camera_poses.csv"
         self.sonar_csv = self.output_path / "sonar_data.csv"
+        self.sonar_file = self.output_path / "sonar.pkl"
 
         self.image_dir = self.output_path / "images"
         self.image_dir.mkdir(parents=True, exist_ok=True)
-
-        self.sonar_dir = self.output_path / "sonar"
-        self.sonar_dir.mkdir(parents=True, exist_ok=True)
 
         self.img_topic = img_topic
         self.odo_topic = odo_topic
@@ -189,9 +187,9 @@ class Dataset:
         return self.cameras_csv.exists() and\
             self.sonar_csv.exists() and\
             self.image_dir.exists() and\
-            self.sonar_dir.exists() and\
+            self.sonar_file.exists() and\
             self.image_dir.is_dir() and\
-            self.sonar_dir.is_dir() and\
+            self.sonar_file.is_dir() and\
             len(self.images) > 0 and\
             len(self.sonar) > 0
 
@@ -246,6 +244,7 @@ class Dataset:
         odometry_data: List[Tuple[int, Pose]] = []
         images_metadata: List[int] = []
         sonar_data: List[Tuple[int, int, float]] = []
+        acoustic_data: List[Tuple[int, List[float], List[float]]] = []
         nav_data: List[Tuple[int, float, float, float, float, float, float]] = []
 
         with AnyReader(self.bag_paths, default_typestore=self.typestore) as reader:
@@ -309,15 +308,11 @@ class Dataset:
                         slant_range
                     ))
 
-                    filepath = self.sonar_dir / f"{timestamp}.npz"
-                    if filepath.exists():
-                        continue
-
-                    np.savez_compressed(
-                        filepath,
-                        port_intensities=port_intensities,
-                        stbd_intensities=stbd_intensities
-                    )
+                    acoustic_data.append((
+                        timestamp,
+                        port_intensities,
+                        stbd_intensities
+                    ))
                 elif connection.topic == self.nav_topic:
                     nav_data.append((
                         timestamp,
@@ -329,8 +324,11 @@ class Dataset:
                         msg.orientation.yaw
                     ))
 
-        if not odometry_data or not images_metadata:
+        if not odometry_data or not images_metadata or not sonar_data or not nav_data:
             raise ValueError("Error: Missing data in topics. Check your bag topic names.")
+
+        with open(self.sonar_file, "wb") as f:
+            pickle.dump(acoustic_data, f)
 
         odo_timestamps = np.array([o[0] for o in odometry_data])
         for img_ts in images_metadata:
