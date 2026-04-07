@@ -189,9 +189,7 @@ class Dataset:
             self.image_dir.exists() and\
             self.sonar_file.exists() and\
             self.image_dir.is_dir() and\
-            self.sonar_file.is_dir() and\
-            len(self.images) > 0 and\
-            len(self.sonar) > 0
+            len(self.images) > 0
 
     def _recurse_dir(self, path: Path) -> List[Path]:
         files = []
