@@ -37,14 +37,22 @@ class Pose:
 
 
 class Image:
-    headers = ("timestamp", "x", "y", "z", "qw", "qx", "qy", "qz", "fx", "fy", "cx", "cy")
+    headers = ("timestamp", "x", "y", "z", "qw", "qx", "qy", "qz", "fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3", "k4", "k5", "k6")
 
     def __init__(self,
         pose: Pose,
         fx: float,
         fy: float,
         cx: float,
-        cy: float
+        cy: float,
+        k1: float,
+        k2: float,
+        p1: float,
+        p2: float,
+        k3: float,
+        k4: float,
+        k5: float,
+        k6: float
     ):
         self.pose = pose
 
@@ -54,6 +62,14 @@ class Image:
         self.fy = fy
         self.cx = cx
         self.cy = cy
+        self.k1 = k1
+        self.k2 = k2
+        self.p1 = p1
+        self.p2 = p2
+        self.k3 = k3
+        self.k4 = k4
+        self.k5 = k5
+        self.k6 = k6
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> Self:
@@ -71,7 +87,15 @@ class Image:
             fx=float(data["fx"]),
             fy=float(data["fy"]),
             cx=float(data["cx"]),
-            cy=float(data["cy"])
+            cy=float(data["cy"]),
+            k1=float(data["k1"]),
+            k2=float(data["k2"]),
+            p1=float(data["p1"]),
+            p2=float(data["p2"]),
+            k3=float(data["k3"]),
+            k4=float(data["k4"]),
+            k5=float(data["k5"]),
+            k6=float(data["k6"])
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -87,7 +111,15 @@ class Image:
             "fx": self.fx,
             "fy": self.fy,
             "cx": self.cx,
-            "cy": self.cy
+            "cy": self.cy,
+            "k1": self.k1,
+            "k2": self.k2,
+            "p1": self.p1,
+            "p2": self.p2,
+            "k3": self.k3,
+            "k4": self.k4,
+            "k5": self.k5,
+            "k6": self.k6
         }
 
 
@@ -282,7 +314,18 @@ class Dataset:
                     ))
                 elif connection.topic == self.info_topic and camera_params is None:
                     # K: [fx, 0, cx, 0, fy, cy, 0, 0, 1]
-                    camera_params = msg.K
+                    # D: [k1, k2, p1, p2, k3, k4, k5, k6]
+                    fx, fy = msg.K[0], msg.K[4]
+                    cx, cy = msg.K[2], msg.K[5]
+
+                    # Extract the common 8 distortion parameters
+                    k1, k2 = msg.D[0], msg.D[1]
+                    p1, p2 = msg.D[2], msg.D[3]
+                    k3, k4 = msg.D[4], msg.D[5]
+                    k5, k6 = msg.D[6], msg.D[7]
+
+                    # Store the 12 parameters required for the FULL_OPENCV model
+                    camera_params = (fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, k5, k6)
                 elif connection.topic == self.sonar_topic:
                     speed_of_sound = msg.sonar_ping.f_speed_of_sound
                     f_range_ms = msg.sonar_samples[0].sonar_ping_channel.f_range_ms
@@ -335,9 +378,17 @@ class Dataset:
             image = Image(
                 pose=matched_pose,
                 fx=camera_params[0],
-                fy=camera_params[4],
+                fy=camera_params[1],
                 cx=camera_params[2],
-                cy=camera_params[5]
+                cy=camera_params[3],
+                k1=camera_params[4],
+                k2=camera_params[5],
+                p1=camera_params[6],
+                p2=camera_params[7],
+                k3=camera_params[8],
+                k4=camera_params[9],
+                k5=camera_params[10],
+                k6=camera_params[11]
             )
             self.images[image.pose.timestamp] = image
 

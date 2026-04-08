@@ -17,9 +17,9 @@ class Photogrammetry:
         if not self.images_dir.exists():
             raise ValueError("Image directory does not exist.")
 
-        # Camera params
+        # Camera params (https://deepwiki.com/colmap/pycolmap/4.1-camera-models#complete-example)
         img = list(self.dataset.images.values())[0]
-        self.camera_params = (img.fx, img.fy, img.cx, img.cy)
+        self.camera_params = (img.fx, img.fy, img.cx, img.cy, img.k1, img.k2, img.p1, img.p2, img.k3, img.k4, img.k5, img.k6)
 
         # Prepare paths for COLMAP outputs
         self.output_dir = Path(output_path)
@@ -35,11 +35,11 @@ class Photogrammetry:
         contrast_threshold: float = 0.002,
         max_num_features: int = 8192,
         pos_trans: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-        pos_std: Tuple[float, float, float] = (2.0, 2.0, 2.0),
+        pos_std: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         max_distance: float = 5.0
     ):
         reader_options = pycolmap.ImageReaderOptions()
-        reader_options.camera_model = "PINHOLE"
+        reader_options.camera_model = pycolmap.CameraModelId.FULL_OPENCV.name
         reader_options.camera_params = ",".join(map(str, self.camera_params))
 
         extraction_options = pycolmap.FeatureExtractionOptions()
