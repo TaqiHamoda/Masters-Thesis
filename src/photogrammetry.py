@@ -17,9 +17,9 @@ class Photogrammetry:
         if not self.images_dir.exists():
             raise ValueError("Image directory does not exist.")
 
-        # Camera params (https://forums.unrealengine.com/t/colmap-text-export-pinhole-option/2657130/10)
+        # Camera params (https://deepwiki.com/colmap/pycolmap/4.1-camera-models#complete-example)
         img = list(self.dataset.images.values())[0]
-        self.camera_params = (img.fx, img.fy, img.cx, img.cy, img.k1, img.k2, img.p1, img.p2, img.k3, img.k4, img.k5, img.k6)
+        self.camera_params = (img.fx, img.fy, img.cx, img.cy, 0, 0, 0, 0)
 
         # Prepare paths for COLMAP outputs
         self.output_dir = Path(output_path)
@@ -39,12 +39,12 @@ class Photogrammetry:
         max_distance: float = 5.0
     ):
         reader_options = pycolmap.ImageReaderOptions()
-        reader_options.camera_model = pycolmap.CameraModelId.FULL_OPENCV.name
+        reader_options.camera_model = pycolmap.CameraModelId.OPENCV.name
         reader_options.camera_params = ",".join(map(str, self.camera_params))
 
         extraction_options = pycolmap.FeatureExtractionOptions()
-        extraction_options.sift.peak_threshold = contrast_threshold    # Default is 0.006666666666666667
-        extraction_options.sift.max_num_features = max_num_features    # Default is 8192
+        extraction_options.sift.peak_threshold = contrast_threshold
+        extraction_options.sift.max_num_features = max_num_features
 
         pycolmap.extract_features(
             database_path=self.database_path,
