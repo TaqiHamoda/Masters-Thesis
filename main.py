@@ -1,7 +1,7 @@
 import yaml
 from time import perf_counter, sleep
 
-from dataset.dataset import Dataset
+from src.dataset import Dataset
 from src.photogrammetry import Photogrammetry
 
 
