@@ -40,6 +40,8 @@ class Photogrammetry:
         pos_std: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         max_distance: float = 5.0
     ):
+        self.workspace_path.mkdir(exist_ok=True)
+
         reader_options = pycolmap.ImageReaderOptions()
         reader_options.camera_model = pycolmap.CameraModelId.OPENCV.name
         reader_options.camera_params = ",".join(map(str, self.camera_params))
