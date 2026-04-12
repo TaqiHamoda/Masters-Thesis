@@ -6,144 +6,12 @@ from rosbags.typesys import Stores, get_types_from_msg, get_typestore
 import csv
 from tabulate import tabulate
 from pathlib import Path
-from typing import Self, List, Tuple, Dict, Any
+from typing import List, Tuple, Dict
+
+from .datatypes import Image, Pose, SideScanSonar, Navigation
 
 SONARTYPE_PORT_SIDESCAN = 1
 SONARTYPE_STARBOARD_SIDESCAN = 2
-
-
-class Pose:
-    def __init__(self,
-        timestamp: int,
-        x: float,
-        y: float,
-        z: float,
-        qw: float,
-        qx: float,
-        qy: float,
-        qz: float
-    ):
-        self.timestamp = timestamp
-        self.x = x
-        self.y = y
-        self.z = z
-        self.qw = qw
-        self.qx = qx
-        self.qy = qy
-        self.qz = qz
-
-    def __str__(self):
-        return f"Pose(timestamp={self.timestamp}, x={self.x}, y={self.y}, z={self.z}, qw={self.qw}, qx={self.qx}, qy={self.qy}, qz={self.qz})"
-
-
-class Image:
-    headers = ("timestamp", "x", "y", "z", "qw", "qx", "qy", "qz", "fx", "fy", "cx", "cy")
-
-    def __init__(self,
-        pose: Pose,
-        fx: float,
-        fy: float,
-        cx: float,
-        cy: float,
-    ):
-        self.pose = pose
-
-        self.filename = f"{pose.timestamp}.jpg"
-
-        self.fx = fx
-        self.fy = fy
-        self.cx = cx
-        self.cy = cy
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> Self:
-        return Image(
-            pose=Pose(
-                int(data["timestamp"]),
-                float(data["x"]),
-                float(data["y"]),
-                float(data["z"]),
-                float(data["qw"]),
-                float(data["qx"]),
-                float(data["qy"]),
-                float(data["qz"])
-            ),
-            fx=float(data["fx"]),
-            fy=float(data["fy"]),
-            cx=float(data["cx"]),
-            cy=float(data["cy"])
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "timestamp": self.pose.timestamp,
-            "x": self.pose.x,
-            "y": self.pose.y,
-            "z": self.pose.z,
-            "qw": self.pose.qw,
-            "qx": self.pose.qx,
-            "qy": self.pose.qy,
-            "qz": self.pose.qz,
-            "fx": self.fx,
-            "fy": self.fy,
-            "cx": self.cx,
-            "cy": self.cy
-        }
-
-
-class SideScanSonar:
-    headers = ("timestamp", "num_samples", "slant_range", "bin_size", "east", "north", "altitude", "roll", "pitch", "yaw")
-
-    def __init__(self,
-        timestamp: int,
-        num_samples: int,
-        slant_range: float,
-        east: float,
-        north: float,
-        altitude: float,
-        roll: float,
-        pitch: float,
-        yaw: float
-    ):
-        self.timestamp = timestamp
-        self.num_samples = num_samples
-        self.slant_range = slant_range
-        self.east = east
-        self.north = north
-        self.altitude = altitude
-        self.roll = roll
-        self.pitch = pitch
-        self.yaw = yaw
-
-        self.bin_size = self.slant_range / self.num_samples
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> Self:
-        return SideScanSonar(
-            int(data["timestamp"]),
-            int(data["num_samples"]),
-            float(data["slant_range"]),
-            float(data["east"]),
-            float(data["north"]),
-            float(data["altitude"]),
-            float(data["roll"]),
-            float(data["pitch"]),
-            float(data["yaw"])
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "timestamp": self.timestamp,
-            "num_samples": self.num_samples,
-            "slant_range": self.slant_range,
-            "bin_size": self.bin_size,
-            "east": self.east,
-            "north": self.north,
-            "altitude": self.altitude,
-            "roll": self.roll,
-            "pitch": self.pitch,
-            "yaw": self.yaw
-        }
 
 
 class Dataset:
@@ -154,7 +22,9 @@ class Dataset:
         odo_topic: str,
         info_topic: str,
         sonar_topic: str,
-        nav_topic: str
+        nav_topic: str,
+        camera_trans: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        sonar_trans: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     ):
         self.data_path = Path(data_path)
         self.msg_path = self.data_path / "msgs"
@@ -167,7 +37,7 @@ class Dataset:
         self.output_path.mkdir(parents=True, exist_ok=True)
 
         self.cameras_csv = self.output_path / "camera_poses.csv"
-        self.sonar_csv = self.output_path / "sonar_data.csv"
+        self.sonar_csv = self.output_path / "sonar_poses.csv"
         self.sonar_file = self.output_path / "sonar.pkl"
 
         self.image_dir = self.output_path / "images"
@@ -181,6 +51,9 @@ class Dataset:
 
         self.images: Dict[str, Image] = {}
         self.sonar: Dict[str, SideScanSonar] = {}
+
+        self.camera_trans = camera_trans
+        self.sonar_trans = sonar_trans
 
     def exists(self) -> bool:
         return self.cameras_csv.exists() and\
@@ -211,17 +84,6 @@ class Dataset:
 
         self.typestore.register(add_types)
 
-    def export_data(self):
-        with open(self.cameras_csv, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=Image.headers)
-            writer.writeheader()
-            writer.writerows([image.to_dict() for image in self.images.values()])
-
-        with open(self.sonar_csv, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=SideScanSonar.headers)
-            writer.writeheader()
-            writer.writerows([sonar.to_dict() for sonar in self.sonar.values()])
-
     def load_data_from_csv(self):
         with open(self.cameras_csv, 'r') as f:
             reader = csv.DictReader(f)
@@ -233,14 +95,14 @@ class Dataset:
             reader = csv.DictReader(f)
             for row in reader:
                 sonar = SideScanSonar.from_dict(row)
-                self.sonar[sonar.timestamp] = sonar
+                self.sonar[sonar.navigation.pose.timestamp] = sonar
 
     def load_data_from_bags(self):
         camera_params = None
         odometry_data: List[Tuple[int, Pose]] = []
         images_metadata: List[int] = []
         sonar_data: List[Tuple[int, int, float]] = []
-        acoustic_data: List[Tuple[int, List[float], List[float]]] = []
+        acoustic_data: Dict[int, Tuple[List[float], List[float]]] = {}
         nav_data: List[Tuple[int, float, float, float, float, float, float]] = []
 
         with AnyReader(self.bag_paths, default_typestore=self.typestore) as reader:
@@ -292,7 +154,8 @@ class Dataset:
                     f_range_ms = msg.sonar_samples[0].sonar_ping_channel.f_range_ms
                     f_range_delay_ms = msg.sonar_samples[0].sonar_ping_channel.f_range_delay_ms
 
-                    slant_range = (f_range_ms + f_range_delay_ms) * speed_of_sound / 2000.0
+                    delay_range = f_range_delay_ms * speed_of_sound / 1000.0
+                    slant_range = (f_range_ms + f_range_delay_ms) * speed_of_sound / 1000.0
 
                     port_intensities, stbd_intensities = None, None
                     for i in range(len(msg.sonar_samples)):
@@ -305,14 +168,11 @@ class Dataset:
                     sonar_data.append((
                         timestamp,
                         len(port_intensities),
-                        slant_range
+                        slant_range,
+                        delay_range
                     ))
 
-                    acoustic_data.append((
-                        timestamp,
-                        port_intensities,
-                        stbd_intensities
-                    ))
+                    acoustic_data[timestamp] = (port_intensities, stbd_intensities)
                 elif connection.topic == self.nav_topic:
                     nav_data.append((
                         timestamp,
@@ -327,8 +187,9 @@ class Dataset:
         if not odometry_data or not images_metadata or not sonar_data or not nav_data:
             raise ValueError("Error: Missing data in topics. Check your bag topic names.")
 
-        with open(self.sonar_file, "wb") as f:
-            pickle.dump(acoustic_data, f)
+        if not self.sonar_file.exists():
+            with open(self.sonar_file, "wb") as f:
+                pickle.dump(acoustic_data, f)
 
         odo_timestamps = np.array([o[0] for o in odometry_data])
         for img_ts in images_metadata:
@@ -337,49 +198,69 @@ class Dataset:
             matched_pose.timestamp = img_ts  # Update timestamp to match image
 
             image = Image(
-                pose=matched_pose,
+                pose=matched_pose.translate(self.camera_trans),
                 fx=camera_params[0],
                 fy=camera_params[1],
                 cx=camera_params[2],
                 cy=camera_params[3],
             )
-            self.images[image.pose.timestamp] = image
+            self.images[img_ts] = image
 
         nav_timestamps = np.array([n[0] for n in nav_data])
-        for sonar_ts, num_samples, slant_range in sonar_data:
-            idx = (np.abs(nav_timestamps - sonar_ts)).argmin()
-            matched_nav = nav_data[idx]
+        for sonar_ts, num_samples, slant_range, delay_range in sonar_data:
+            odo_idx = (np.abs(odo_timestamps - sonar_ts)).argmin()
+            nav_idx = (np.abs(nav_timestamps - sonar_ts)).argmin()
+
+            matched_nav = nav_data[nav_idx]
+            matched_pose = odometry_data[odo_idx][1]
+            matched_pose.timestamp = sonar_ts  # Update timestamp to match sonar
 
             sonar = SideScanSonar(
-                timestamp=sonar_ts,
                 num_samples=num_samples,
                 slant_range=slant_range,
-                east=matched_nav[1],
-                north=matched_nav[2],
-                altitude=matched_nav[3],
-                roll=matched_nav[4],
-                pitch=matched_nav[5],
-                yaw=matched_nav[6]
+                delay_range=delay_range,
+                navigation=Navigation(
+                    pose=matched_pose.translate(self.sonar_trans),
+                    east=matched_nav[1],
+                    north=matched_nav[2],
+                    altitude=matched_nav[3],
+                    roll=matched_nav[4],
+                    pitch=matched_nav[5],
+                    yaw=matched_nav[6]
+                )
             )
-            self.sonar[sonar.timestamp] = sonar
+            self.sonar[sonar_ts] = sonar
+
+    def export_data(self):
+        with open(self.cameras_csv, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=Image.headers)
+            writer.writeheader()
+            writer.writerows([image.to_dict() for image in self.images.values()])
+
+        with open(self.sonar_csv, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=SideScanSonar.headers)
+            writer.writeheader()
+            writer.writerows([sonar.to_dict() for sonar in self.sonar.values()])
 
     def data_stats(self):
         min_x, min_y, min_z, min_alt = np.inf, np.inf, np.inf, np.inf
         max_x, max_y, max_z, max_alt = -np.inf, -np.inf, -np.inf, -np.inf
 
         for sonar in self.sonar.values():
-            if sonar.altitude > max_alt: max_alt = sonar.altitude
-            elif sonar.altitude < min_alt: min_alt = sonar.altitude
+            nav = sonar.navigation
+            pose = sonar.navigation.pose
 
-        for image in self.images.values():
-            if image.pose.x > max_x: max_x = image.pose.x
-            elif image.pose.x < min_x: min_x = image.pose.x
+            if nav.altitude > max_alt: max_alt = nav.altitude
+            elif nav.altitude < min_alt: min_alt = nav.altitude
 
-            if image.pose.y > max_y: max_y = image.pose.y
-            elif image.pose.y < min_y: min_y = image.pose.y
+            if pose.x > max_x: max_x = pose.x
+            elif pose.x < min_x: min_x = pose.x
 
-            if image.pose.z > max_z: max_z = image.pose.z
-            elif image.pose.z < min_z: min_z = image.pose.z
+            if pose.y > max_y: max_y = pose.y
+            elif pose.y < min_y: min_y = pose.y
+
+            if pose.z > max_z: max_z = pose.z
+            elif pose.z < min_z: min_z = pose.z
 
         with open(self.output_path / "data_stats.txt", "w") as f:
             print(f"X range: {min_x:.2f} to {max_x:.2f} meters (span: {max_x - min_x:.2f})", file=f)

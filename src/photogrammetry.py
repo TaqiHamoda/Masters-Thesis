@@ -28,13 +28,13 @@ class Photogrammetry:
         self.sparse_path = self.output_dir / "sparse"
         self.sparse_refined_path = self.output_dir / "sparse_pruned"
         self.mvs_path = self.output_dir / "mvs"
-        self.dense_ply = self.mvs_path / "dense.ply"
+        self.fusion_path = self.output_dir / "fusion"
+        self.fused_ply = self.fusion_path / "fused.ply"
         self.mesh_ply = self.output_dir / "mesh.ply"
 
     def extract_and_match_features(self,
         contrast_threshold: float = 0.002,
         max_num_features: int = 8192,
-        pos_trans: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         pos_std: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         max_distance: float = 5.0
     ):
@@ -61,9 +61,7 @@ class Photogrammetry:
             for image in colmap_db.read_all_images():
                 ts = int(image.name.replace(".jpg", ''))
                 pose = self.dataset.images[ts].pose
-                position = (
-                    np.array((pose.x, pose.y, pose.z)) + np.array(pos_trans)
-                ).reshape(3, 1)
+                position = np.array((pose.x, pose.y, pose.z)).reshape(3, 1)
 
                 # Coordinate system: Cartesian (X,Y,Z coords, not Lat/Lon)
                 colmap_db.write_pose_prior(
@@ -135,19 +133,27 @@ class Photogrammetry:
         if not self.mvs_path.exists():
             raise ValueError("MVS outputs not found. Please run stereo matching before dense reconstruction.")
 
-        fusion_options = pycolmap.StereoFusionOptions()
-        fusion_options.max_image_size = max_image_size
-        fusion_options.check_num_images = check_num_images
-        fusion_options.use_cache = True
-        fusion_options.cache_size = cache_size
+        self.fusion_path.mkdir(exist_ok=True)
 
-        pycolmap.stereo_fusion(self.dense_ply, self.mvs_path, options=fusion_options)
+        reconstruction = None
+        if self.fusion_path.exists() and any(self.fusion_path.iterdir()):
+            reconstruction = pycolmap.Reconstruction(self.fusion_path)
+        else:
+            fusion_options = pycolmap.StereoFusionOptions()
+            fusion_options.max_image_size = max_image_size
+            fusion_options.check_num_images = check_num_images
+            fusion_options.use_cache = True
+            fusion_options.cache_size = cache_size
+
+            reconstruction = pycolmap.stereo_fusion(self.fusion_path, self.mvs_path, options=fusion_options)
+
+        reconstruction.export_PLY(self.fused_ply)
 
     def create_mesh(self):
-        if not self.dense_ply.exists():
+        if not self.fused_ply.exists():
             raise ValueError("Dense reconstruction outputs not found. Please run dense reconstruction before meshing.")
 
-        pycolmap.poisson_meshing(self.dense_ply, self.mesh_ply)
+        pycolmap.poisson_meshing(self.fused_ply, self.mesh_ply)
 
     @staticmethod
     def has_cuda() -> bool:
