@@ -39,6 +39,7 @@ class Dataset:
         self.cameras_csv = self.output_path / "camera_poses.csv"
         self.sonar_csv = self.output_path / "sonar_poses.csv"
         self.sonar_file = self.output_path / "sonar.pkl"
+        self.sonar_xtf = self.output_path / "sonar.xtf"
 
         self.image_dir = self.output_path / "images"
         self.image_dir.mkdir(parents=True, exist_ok=True)
@@ -49,8 +50,8 @@ class Dataset:
         self.sonar_topic = sonar_topic
         self.nav_topic = nav_topic
 
-        self.images: Dict[str, Image] = {}
-        self.sonar: Dict[str, SideScanSonar] = {}
+        self.images: Dict[int, Image] = {}
+        self.sonar: Dict[int, SideScanSonar] = {}
 
         self.camera_trans = camera_trans
         self.sonar_trans = sonar_trans
@@ -157,8 +158,10 @@ class Dataset:
                     delay_range = f_range_delay_ms * speed_of_sound / 1000.0
                     slant_range = (f_range_ms + f_range_delay_ms) * speed_of_sound / 1000.0
 
+                    freq = 0
                     port_intensities, stbd_intensities = None, None
                     for i in range(len(msg.sonar_samples)):
+                        freq = msg.sonar_samples[i].sonar_ping_channel.f_freq_hz
                         width = msg.sonar_samples[i].sonar_ping_channel.w_samples
                         if msg.sonar_samples[i].sonar_ping_channel.w_sonar_type == SONARTYPE_PORT_SIDESCAN:
                             port_intensities = msg.sonar_samples[i].data[:width][::-1]  # Reverse port side for correct left-to-right order
@@ -169,19 +172,25 @@ class Dataset:
                         timestamp,
                         len(port_intensities),
                         slant_range,
-                        delay_range
+                        delay_range,
+                        freq,
+                        speed_of_sound
                     ))
 
                     acoustic_data[timestamp] = (port_intensities, stbd_intensities)
                 elif connection.topic == self.nav_topic:
+                    x_velocity, y_velocity, z_velocity = msg.body_velocity.x, msg.body_velocity.y, msg.body_velocity.z
+                    speed = np.sqrt(x_velocity**2 + y_velocity**2 + z_velocity**2)
+
                     nav_data.append((
                         timestamp,
-                        msg.position.east,
-                        msg.position.north,
+                        msg.global_position.latitude,
+                        msg.global_position.longitude,
                         msg.altitude,
                         msg.orientation.roll,
                         msg.orientation.pitch,
-                        msg.orientation.yaw
+                        msg.orientation.yaw,
+                        speed
                     ))
 
         if not odometry_data or not images_metadata or not sonar_data or not nav_data:
@@ -207,7 +216,7 @@ class Dataset:
             self.images[img_ts] = image
 
         nav_timestamps = np.array([n[0] for n in nav_data])
-        for sonar_ts, num_samples, slant_range, delay_range in sonar_data:
+        for sonar_ts, num_samples, slant_range, delay_range, freq, speed_of_sound in sonar_data:
             odo_idx = (np.abs(odo_timestamps - sonar_ts)).argmin()
             nav_idx = (np.abs(nav_timestamps - sonar_ts)).argmin()
 
@@ -219,14 +228,17 @@ class Dataset:
                 num_samples=num_samples,
                 slant_range=slant_range,
                 delay_range=delay_range,
+                frequency=int(freq),
+                speed_of_sound=speed_of_sound,
                 navigation=Navigation(
                     pose=matched_pose.translate(self.sonar_trans),
-                    east=matched_nav[1],
-                    north=matched_nav[2],
+                    latitude=matched_nav[1],
+                    longitude=matched_nav[2],
                     altitude=matched_nav[3],
                     roll=matched_nav[4],
                     pitch=matched_nav[5],
-                    yaw=matched_nav[6]
+                    yaw=matched_nav[6],
+                    speed=matched_nav[7]
                 )
             )
             self.sonar[sonar_ts] = sonar

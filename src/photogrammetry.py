@@ -2,7 +2,6 @@ import pycolmap, pymeshlab
 import numpy as np
 from pathlib import Path
 from typing import Tuple
-import subprocess
 
 from .dataset import Dataset
 
@@ -145,6 +144,7 @@ class Photogrammetry:
 
     def create_mesh(self,
         mesh_depth: int = 8,
+        reduce_perc: float = 90.0,
         tex_size: int = 1024
     ):
         if not self.fused_ply.exists():
@@ -159,6 +159,14 @@ class Photogrammetry:
         ms.apply_filter(
             'generate_surface_reconstruction_screened_poisson',
             depth=mesh_depth
+        )
+
+        # https://pymeshlab.readthedocs.io/en/latest/filter_list.html#meshing_decimation_quadric_edge_collapse
+        ms.apply_filter(
+            'meshing_decimation_quadric_edge_collapse',
+            targetperc=pymeshlab.PercentageValue(reduce_perc),
+            preservenormal=True,
+            preservetopology=True
         )
 
         # https://pymeshlab.readthedocs.io/en/latest/filter_list.html#compute_texcoord_parametrization_triangle_trivial_per_wedge

@@ -4,43 +4,47 @@ from .pose import Pose
 
 
 class Navigation:
-    headers = Pose.headers + ["east", "north", "altitude", "roll", "pitch", "yaw"]
+    headers = Pose.headers + ["latitude", "longitude", "altitude", "roll", "pitch", "yaw", "speed"]
 
     def __init__(self,
         pose: Pose,
-        east: float,
-        north: float,
+        latitude: float,
+        longitude: float,
         altitude: float,
         roll: float,
         pitch: float,
-        yaw: float
+        yaw: float,
+        speed: float
     ):
         self.pose = pose
-        self.east = east
-        self.north = north
+        self.latitude = latitude
+        self.longitude = longitude
         self.altitude = altitude
         self.roll = roll
         self.pitch = pitch
         self.yaw = yaw
+        self.speed = speed
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> Self:
         return Navigation(
             pose=Pose.from_dict(data),
-            east=float(data["east"]),
-            north=float(data["north"]),
+            latitude=float(data["latitude"]),
+            longitude=float(data["longitude"]),
             altitude=float(data["altitude"]),
             roll=float(data["roll"]),
             pitch=float(data["pitch"]),
-            yaw=float(data["yaw"])
+            yaw=float(data["yaw"]),
+            speed=float(data["speed"])
         )
 
     def to_dict(self) -> Dict[str, Any]:
         return self.pose.to_dict() | {
-            "east": self.east,
-            "north": self.north,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
             "altitude": self.altitude,
             "roll": self.roll,
             "pitch": self.pitch,
-            "yaw": self.yaw
+            "yaw": self.yaw,
+            "speed": self.speed
         }

@@ -3,6 +3,7 @@ from time import perf_counter, sleep
 
 from src.dataset import Dataset
 from src.photogrammetry import Photogrammetry
+from src.sonar import export_to_xtf
 
 
 def photogrammetry_pipeline(photogrammetry: Photogrammetry, cfg: dict):
@@ -56,6 +57,7 @@ if __name__ == "__main__":
     topics_cfg = cfg['topics']
     extrinsics_cfg = cfg['extrinsics']
     photogrammetry_cfg = cfg['photogrammetry']
+    xtf_cfg = cfg['export_xtf']
 
     dataset = Dataset(
         data_path=paths_cfg['data_path'],
@@ -83,3 +85,6 @@ if __name__ == "__main__":
         photogrammetry = Photogrammetry(dataset, output_path=paths_cfg['output_path'])
         photogrammetry_pipeline(photogrammetry, photogrammetry_cfg)
 
+    if xtf_cfg['enabled']:
+        print("Processing Sonar Data into XTF file.")
+        export_to_xtf(dataset, xtf_cfg['sonar_name'], xtf_cfg['sample_dtype'])
